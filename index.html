@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title>Mein IPTV Player</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
+header{padding:22px;background:#172338;text-align:center}
+h1{margin:0;color:#49d6df}
+main{max-width:800px;margin:auto;padding:16px}
+input,button,select{width:100%;padding:13px;margin:6px 0;border:0;border-radius:9px;font-size:16px}
+input,select{background:#26364e;color:white}
+button{background:#13b8c7;color:#071521;font-weight:bold}
+video{width:100%;background:#000;border-radius:12px;margin:12px 0}
+.channel{display:flex;align-items:center;gap:10px;background:#1b2940;margin:7px 0;padding:12px;border-radius:9px}
+.channel button{width:auto;margin-left:auto;padding:9px}
+.name{flex:1;overflow-wrap:anywhere}
+small{color:#b9c7dc}
+</style>
+</head>
+<body>
+<header><h1>IPTV Player</h1><p>Dein persönlicher Live-TV-Player</p></header>
+<main>
+<h3>Stream abspielen</h3>
+<input id="url" type="url" placeholder="Stream-URL (.m3u8)">
+<button id="play">▶ Stream starten</button>
+<video id="video" controls playsinline></video>
+<p id="status">Bereit</p>
+
+<h3>M3U-Playlist laden</h3>
+<input id="file" type="file" accept=".m3u,.m3u8,.txt">
+<input id="search" type="search" placeholder="Sender suchen">
+<div id="channels"></div>
+</main>
+<script>
+const video=document.getElementById('video');
+const status=document.getElementById('status');
+let hls=null,channels=[];
+
+function play(url){
+  if(!/^https?:\/\//i.test(url)){
+    status.textContent='Bitte eine gültige HTTP(S)-URL eingeben.';
+    return;
+  }
+  if(hls){hls.destroy();hls=null;}
+  video.pause();video.removeAttribute('src');video.load();
+
+  if(video.canPlayType('application/vnd.apple.mpegurl')){
+    video.src=url;
+    video.play().catch(()=>status.textContent='Tippe auf Play.');
+  }else if(window.Hls&&Hls.isSupported()){
+    hls=new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{
+      video.play().catch(()=>status.textContent='Stream geladen. Tippe auf Play.');
+    });
+    hls.on(Hls.Events.ERROR,(e,d)=>{
+      if(d.fatal)status.textContent='Streamfehler. URL oder Verbindung prüfen.';
+    });
+  }else{
+    status.textContent='HLS wird in diesem Browser nicht unterstützt.';
+  }
+}
+document.getElementById('play').onclick=()=>{
+  play(document.getElementById('url').value.trim());
+};
+
+document.getElementById('file').onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file)return;
+  try{
+    const text=await file.text();
+    channels=[];
+    let meta='';
+    for(const raw of text.split(/\r?\n/)){
+      const line=raw.trim();
+      if(line.startsWith('#EXTINF:'))meta=line;
+      else if(line&&!line.startsWith('#')&&/^https?:\/\//i.test(line)){
+        const name=meta.includes(',')?meta.slice(meta.lastIndexOf(',')+1).trim():'Sender';
+        const group=(meta.match(/group-title="([^"]*)"/)||[])[1]||'Allgemein';
+        channels.push({name,url:line,group});
+        meta='';
+      }
+    }
+    render();
+    status.textContent=channels.length+' Sender geladen.';
+  }catch(err){status.textContent='Playlist konnte nicht gelesen werden.';}
+};
+
+function render(){
+  const term=document.getElementById('search').value.toLowerCase();
+  const root=document.getElementById('channels');
+  root.replaceChildren();
+  channels.filter(c=>(c.name+' '+c.group).toLowerCase().includes(term))
+  .forEach(c=>{
+    const row=document.createElement('div');row.className='channel';
+    const name=document.createElement('div');name.className='name';
+    name.textContent=c.name;
+    const group=document.createElement('small');group.textContent=c.group;
+    name.appendChild(document.createElement('br'));name.appendChild(group);
+    const button=document.createElement('button');button.textContent='▶';
+    button.onclick=()=>{document.getElementById('url').value=c.url;play(c.url);};
+    row.append(name,button);root.appendChild(row);
+  });
+}
+document.getElementById('search').oninput=render;
+</script>
+</body>
