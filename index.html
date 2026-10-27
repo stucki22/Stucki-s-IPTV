@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -5,109 +6,418 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#101827">
 <title>Mein IPTV Player</title>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
-header{padding:22px;background:#172338;text-align:center}
-h1{margin:0;color:#49d6df}
-main{max-width:800px;margin:auto;padding:16px}
-input,button,select{width:100%;padding:13px;margin:6px 0;border:0;border-radius:9px;font-size:16px}
-input,select{background:#26364e;color:white}
-button{background:#13b8c7;color:#071521;font-weight:bold}
-video{width:100%;background:#000;border-radius:12px;margin:12px 0}
-.channel{display:flex;align-items:center;gap:10px;background:#1b2940;margin:7px 0;padding:12px;border-radius:9px}
-.channel button{width:auto;margin-left:auto;padding:9px}
-.name{flex:1;overflow-wrap:anywhere}
-small{color:#b9c7dc}
+:root {
+  color-scheme: dark;
+  --bg: #101827;
+  --panel: #172338;
+  --item: #202f47;
+  --accent: #49d6df;
+  --text: #f5f7fb;
+  --muted: #b9c7dc;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+}
+header {
+  padding: 22px 16px;
+  background: var(--panel);
+  text-align: center;
+}
+h1 { margin: 0; color: var(--accent); }
+main { max-width: 900px; margin: auto; padding: 16px; }
+h2 { font-size: 19px; margin-top: 25px; }
+input, button, select {
+  width: 100%;
+  padding: 12px;
+  margin: 5px 0;
+  border: 0;
+  border-radius: 8px;
+  font-size: 15px;
+}
+input, select { background: #26364e; color: white; }
+button {
+  background: #13b8c7;
+  color: #071521;
+  font-weight: bold;
+  cursor: pointer;
+}
+button:disabled { opacity: .5; cursor: wait; }
+button.secondary { background: #354660; color: white; }
+video {
+  width: 100%;
+  background: #000;
+  border-radius: 12px;
+  margin: 12px 0;
+  max-height: 65vh;
+}
+#status { color: var(--muted); overflow-wrap: anywhere; }
+.toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.channel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--item);
+  margin: 7px 0;
+  padding: 11px;
+  border-radius: 9px;
+}
+.channel .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.channel small { color: var(--muted); }
+.channel button { width: auto; min-width: 45px; margin: 0; }
+.channel button.fav { background: #354660; color: white; }
+#channels { margin-top: 12px; }
+.note { font-size: 13px; line-height: 1.5; color: var(--muted); }
+.hidden { display: none; }
+@media (max-width: 480px) {
+  main { padding: 12px; }
+  .toolbar { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
-<header><h1>IPTV Player</h1><p>Dein persönlicher Live-TV-Player</p></header>
+<header>
+  <h1>IPTV Player</h1>
+  <p>Dein persönlicher Live-TV-Player</p>
+</header>
+
 <main>
-<h3>Stream abspielen</h3>
-<input id="url" type="url" placeholder="Stream-URL (.m3u8)">
-<button id="play">▶ Stream starten</button>
-<video id="video" controls playsinline></video>
-<p id="status">Bereit</p>
+  <section id="loginSection">
+    <h2>IPTV-Verbindung</h2>
+    <form id="loginForm">
+      <input id="server" type="url"
+        placeholder="Server-URL, z. B. http://server:8080"
+        autocomplete="url" required>
+      <input id="username" type="text"
+        placeholder="Benutzername" autocomplete="username" required>
+      <input id="password" type="password"
+        placeholder="Passwort" autocomplete="current-password" required>
+      <button id="connectBtn" type="submit">Verbinden und Sender laden</button>
+    </form>
+    <p class="note">
+      Verwende nur Zugangsdaten eines IPTV-Anbieters, zu dessen Dienst du
+      berechtigt bist. Zugangsdaten werden von dieser Seite nicht absichtlich
+      an Dritte gesendet. Vermeide öffentliche oder gemeinsam genutzte Geräte.
+    </p>
+  </section>
 
-<h3>M3U-Playlist laden</h3>
-<input id="file" type="file" accept=".m3u,.m3u8,.txt">
-<input id="search" type="search" placeholder="Sender suchen">
-<div id="channels"></div>
+  <section>
+    <h2>Live-TV</h2>
+    <video id="video" controls playsinline></video>
+    <p id="status" role="status" aria-live="polite">Bereit. Bitte verbinde dich.</p>
+  </section>
+
+  <section id="browserSection" class="hidden">
+    <h2>Senderliste</h2>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Sender suchen">
+      <select id="category">
+        <option value="">Alle Sendergruppen</option>
+      </select>
+    </div>
+    <div class="toolbar">
+      <button id="allBtn" type="button" class="secondary">Alle Sender</button>
+      <button id="favBtn" type="button" class="secondary">★ Favoriten</button>
+    </div>
+    <div id="channels"></div>
+  </section>
 </main>
-<script>
-const video=document.getElementById('video');
-const status=document.getElementById('status');
-let hls=null,channels=[];
 
-function play(url){
-  if(!/^https?:\/\//i.test(url)){
-    status.textContent='Bitte eine gültige HTTP(S)-URL eingeben.';
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const video = $("video");
+const status = $("status");
+
+let hls = null;
+let channels = [];
+let favorites = new Set();
+let showingFavorites = false;
+let activeServer = "";
+let activeUser = "";
+let activePassword = "";
+
+try {
+  favorites = new Set(JSON.parse(
+    localStorage.getItem("iptv-favorites") || "[]"
+  ));
+} catch (_) {}
+
+function setStatus(message) {
+  status.textContent = message;
+}
+
+function normalizeServer(value) {
+  const url = new URL(value.trim());
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("Bitte eine HTTP- oder HTTPS-Server-URL eingeben.");
+  }
+  if (url.username || url.password) {
+    throw new Error("Bitte Zugangsdaten separat eingeben.");
+  }
+  return url.origin + url.pathname.replace(/\/+$/, "");
+}
+
+function stopPlayer() {
+  if (hls) {
+    hls.destroy();
+    hls = null;
+  }
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+}
+
+function playStream(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    setStatus("Ungültige Stream-Adresse.");
     return;
   }
-  if(hls){hls.destroy();hls=null;}
-  video.pause();video.removeAttribute('src');video.load();
 
-  if(video.canPlayType('application/vnd.apple.mpegurl')){
-    video.src=url;
-    video.play().catch(()=>status.textContent='Tippe auf Play.');
-  }else if(window.Hls&&Hls.isSupported()){
-    hls=new Hls();
-    hls.loadSource(url);
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    setStatus("Nur HTTP- und HTTPS-Streams werden unterstützt.");
+    return;
+  }
+
+  stopPlayer();
+  setStatus("Stream wird geladen …");
+
+  if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    video.src = parsed.href;
+    video.play().catch(() =>
+      setStatus("Stream geladen. Drücke auf Play.")
+    );
+    return;
+  }
+
+  if (window.Hls && Hls.isSupported()) {
+    hls = new Hls();
+    hls.on(Hls.Events.ERROR, (_, data) => {
+      if (data.fatal) {
+        setStatus("Streamfehler. Prüfe Stream, Verbindung und CORS.");
+        hls.destroy();
+        hls = null;
+      }
+    });
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.play().catch(() =>
+        setStatus("Stream geladen. Drücke auf Play.")
+      );
+    });
+    hls.loadSource(parsed.href);
     hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>{
-      video.play().catch(()=>status.textContent='Stream geladen. Tippe auf Play.');
-    });
-    hls.on(Hls.Events.ERROR,(e,d)=>{
-      if(d.fatal)status.textContent='Streamfehler. URL oder Verbindung prüfen.';
-    });
-  }else{
-    status.textContent='HLS wird in diesem Browser nicht unterstützt.';
+  } else {
+    setStatus("Dieser Browser unterstützt keine passende HLS-Wiedergabe.");
   }
 }
-document.getElementById('play').onclick=()=>{
-  play(document.getElementById('url').value.trim());
-};
 
-document.getElementById('file').onchange=async e=>{
-  const file=e.target.files[0];
-  if(!file)return;
-  try{
-    const text=await file.text();
-    channels=[];
-    let meta='';
-    for(const raw of text.split(/\r?\n/)){
-      const line=raw.trim();
-      if(line.startsWith('#EXTINF:'))meta=line;
-      else if(line&&!line.startsWith('#')&&/^https?:\/\//i.test(line)){
-        const name=meta.includes(',')?meta.slice(meta.lastIndexOf(',')+1).trim():'Sender';
-        const group=(meta.match(/group-title="([^"]*)"/)||[])[1]||'Allgemein';
-        channels.push({name,url:line,group});
-        meta='';
-      }
+async function api(action, params = {}) {
+  const url = new URL(activeServer + "/player_api.php");
+  url.searchParams.set("username", activeUser);
+  url.searchParams.set("password", activePassword);
+  url.searchParams.set("action", action);
+
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url.href);
+  if (!response.ok) {
+    throw new Error("HTTP-Fehler " + response.status +
+      ". Prüfe Server und API-Zugriff.");
+  }
+
+  const data = await response.json();
+  if (data && !Array.isArray(data) &&
+      typeof data === "object" &&
+      (data.user_info || data.server_info)) {
+    const info = data.user_info;
+    if (info && String(info.auth) === "0") {
+      throw new Error("Anmeldung fehlgeschlagen. Zugangsdaten prüfen.");
     }
-    render();
-    status.textContent=channels.length+' Sender geladen.';
-  }catch(err){status.textContent='Playlist konnte nicht gelesen werden.';}
-};
-
-function render(){
-  const term=document.getElementById('search').value.toLowerCase();
-  const root=document.getElementById('channels');
-  root.replaceChildren();
-  channels.filter(c=>(c.name+' '+c.group).toLowerCase().includes(term))
-  .forEach(c=>{
-    const row=document.createElement('div');row.className='channel';
-    const name=document.createElement('div');name.className='name';
-    name.textContent=c.name;
-    const group=document.createElement('small');group.textContent=c.group;
-    name.appendChild(document.createElement('br'));name.appendChild(group);
-    const button=document.createElement('button');button.textContent='▶';
-    button.onclick=()=>{document.getElementById('url').value=c.url;play(c.url);};
-    row.append(name,button);root.appendChild(row);
-  });
+  }
+  return data;
 }
-document.getElementById('search').oninput=render;
+
+function streamUrl(channel) {
+  // Standardformat für Xtream-Codes-kompatible Live-TV-Streams.
+  return activeServer + "/live/" +
+    encodeURIComponent(activeUser) + "/" +
+    encodeURIComponent(activePassword) + "/" +
+    encodeURIComponent(channel.stream_id) + ".m3u8";
+}
+
+async function connect(server, username, password) {
+  activeServer = normalizeServer(server);
+  activeUser = username.trim();
+  activePassword = password;
+
+  if (!activeUser || !activePassword) {
+    throw new Error("Benutzername und Passwort sind erforderlich.");
+  }
+
+  setStatus("Anmeldung wird geprüft …");
+  const authUrl = new URL(activeServer + "/player_api.php");
+  authUrl.searchParams.set("username", activeUser);
+  authUrl.searchParams.set("password", activePassword);
+
+  const response = await fetch(authUrl.href);
+  if (!response.ok) {
+    throw new Error("Server antwortet mit HTTP " + response.status + ".");
+  }
+
+  const auth = await response.json();
+  if (!auth.user_info || String(auth.user_info.auth) !== "1") {
+    throw new Error("Anmeldung fehlgeschlagen. Zugangsdaten oder API prüfen.");
+  }
+
+  setStatus("Sender werden geladen …");
+  const result = await api("get_live_streams");
+
+  if (!Array.isArray(result)) {
+    throw new Error("Der Server lieferte keine gültige Senderliste.");
+  }
+
+  channels = result.map(c => ({
+    id: String(c.stream_id ?? ""),
+    stream_id: c.stream_id,
+    name: c.name || ("Sender " + c.stream_id),
+    group: c.category_name || "Allgemein",
+    category_id: String(c.category_id ?? "")
+  })).filter(c => c.id);
+
+  const categories = new Map();
+  channels.forEach(c => {
+    if (!categories.has(c.group)) {
+      categories.set(c.group, c.category_id);
+    }
+  });
+
+  const select = $("category");
+  select.replaceChildren(new Option("Alle Sendergruppen", ""));
+  for (const group of categories.keys()) {
+    select.add(new Option(group, group));
+  }
+
+  $("browserSection").classList.remove("hidden");
+  render();
+  setStatus(channels.length + " Sender geladen.");
+}
+
+function render() {
+  const term = $("search").value.trim().toLocaleLowerCase();
+  const group = $("category").value;
+  const root = $("channels");
+  root.replaceChildren();
+
+  const filtered = channels.filter(c =>
+    (!showingFavorites || favorites.has(c.id)) &&
+    (!group || c.group === group) &&
+    (c.name + " " + c.group).toLocaleLowerCase().includes(term)
+  );
+
+  if (!filtered.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Keine passenden Sender gefunden.";
+    root.appendChild(empty);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  filtered.forEach(c => {
+    const row = document.createElement("div");
+    row.className = "channel";
+
+    const name = document.createElement("div");
+    name.className = "name";
+
+    const title = document.createElement("div");
+    title.textContent = c.name;
+
+    const groupLabel = document.createElement("small");
+    groupLabel.textContent = c.group;
+
+    name.append(title, groupLabel);
+
+    const favorite = document.createElement("button");
+    favorite.type = "button";
+    favorite.className = "fav";
+    favorite.textContent = favorites.has(c.id) ? "★" : "☆";
+    favorite.setAttribute("aria-label", "Favorit umschalten");
+    favorite.onclick = () => {
+      if (favorites.has(c.id)) favorites.delete(c.id);
+      else favorites.add(c.id);
+
+      try {
+        localStorage.setItem(
+          "iptv-favorites", JSON.stringify([...favorites])
+        );
+      } catch (_) {}
+      render();
+    };
+
+    const play = document.createElement("button");
+    play.type = "button";
+    play.textContent = "▶";
+    play.setAttribute("aria-label", "Sender abspielen");
+    play.onclick = () => {
+      setStatus("Sender: " + c.name);
+      playStream(streamUrl(c));
+    };
+
+    row.append(name, favorite, play);
+    fragment.appendChild(row);
+  });
+
+  root.appendChild(fragment);
+}
+
+$("loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("connectBtn");
+  button.disabled = true;
+
+  try {
+    await connect(
+      $("server").value,
+      $("username").value,
+      $("password").value
+    );
+  } catch (error) {
+    setStatus("Verbindung fehlgeschlagen: " + error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("search").addEventListener("input", render);
+$("category").addEventListener("change", render);
+
+$("allBtn").addEventListener("click", () => {
+  showingFavorites = false;
+  render();
+});
+
+$("favBtn").addEventListener("click", () => {
+  showingFavorites = true;
+  render();
+});
+
+video.addEventListener("error", () => {
+  if (video.error) {
+    setStatus("Videofehler. Streamformat, URL oder Browser prüfen.");
+  }
+});
 </script>
 </body>
+</html>
